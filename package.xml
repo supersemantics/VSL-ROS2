@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>vsl_ros2</name>
+  <version>0.1.0</version>
+  <description>
+    VSL (VERBA Specification Language) governance for ROS 2: reads ROS 2's own verdicts
+    (Nav2 collision monitor, diagnostics, lifecycle, e-stop locks, the ROS graph) as
+    vsl-core Invariants, gates and supervises action goals, records decisions and ROS 2's
+    interventions in a tamper-evident ledger, and holds human-authorised Terminal States.
+  </description>
+  <maintainer email="noreply@example.com">Super Semantics</maintainer>
+  <license>MIT</license>
+  <url type="repository">https://github.com/supersemantics/VSL-ROS2</url>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>rosidl_runtime_py</exec_depend>
+  <exec_depend>action_msgs</exec_depend>
+  <exec_depend>unique_identifier_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>lifecycle_msgs</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
+  <exec_depend>nav2_msgs</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <!-- vsl-core is on PyPI only (super-semantics-vsl). This key is defined in
+       rosdep/vsl_ros2.yaml in this repository; see the README to register it. -->
+  <exec_depend>python3-super-semantics-vsl-pip</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>example_interfaces</test_depend>
+  <test_depend>geometry_msgs</test_depend>
+  <test_depend>std_srvs</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -1,0 +1,3 @@
+# Shell scripts, Dockerfiles and Python run inside Linux containers and on robots:
+# keep LF line endings in every checkout, Windows included.
+* text=auto eol=lf

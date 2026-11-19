@@ -1,0 +1,77 @@
+# vsl_guard in front of Nav2's NavigateToPose.
+#
+#   planner / LLM ──/vsl_guard/navigate_to_pose──▶ vsl_guard ──/navigate_to_pose──▶ Nav2
+#
+# Every condition reads a verdict ROS 2 or Nav2 already produces; none of them
+# re-implements a safety function. Speed, acceleration and obstacle limits stay
+# with Nav2 (velocity_smoother, collision_monitor, the controller).
+#
+#   ros2 launch vsl_ros2 vsl_guard.launch.py params_file:=/path/to/this.yaml
+
+vsl_guard:
+  ros__parameters:
+    action_type: nav2_msgs/action/NavigateToPose
+    served_action: /vsl_guard/navigate_to_pose   # the planner calls this
+    upstream_action: /navigate_to_pose           # Nav2's bt_navigator
+    upstream_accept_timeout_sec: 10.0
+
+    # The record and the Terminal State. Put them somewhere persistent on the
+    # robot, writable by the guard only; the latch file is what survives a restart.
+    ledger_path: /var/lib/vsl/guard_ledger.jsonl
+    latch_path: /var/lib/vsl/guard_latch.json
+    terminal_state: robot-e-stopped
+    release:
+      authority: Site safety officer
+      contact: safety@example.test
+    release_poll_sec: 1.0
+
+    # Checked in this order before a goal is accepted (all must hold), and
+    # recorded under these names in the ledger.
+    conditions: [e_stop, cmd_vel_publishers, bt_navigator, collision_monitor_active, collision_monitor]
+
+    e_stop:
+      type: lock                 # std_msgs/Bool, true = engaged
+      topic: /e_stop
+      terminal: true             # entering it latches the guard and cancels running goals;
+                                 # only vsl_guard_release (a named human + evidence) leaves it
+
+    cmd_vel_publishers:
+      type: sole_publisher       # the ROS graph: nothing bypasses the command path
+      topic: /cmd_vel            # the topic the driver listens to (collision_monitor's output)
+      # Nav2 Jazzy's default bringup has two publishers on cmd_vel: the collision
+      # monitor and the docking server (which publishes there directly, not
+      # through the collision monitor). List exactly what your bringup runs;
+      # anything else on cmd_vel blocks goals.
+      allowed: [/collision_monitor, /docking_server]
+      cancel_running: true       # a bypass mid-goal cancels the goal
+
+    bt_navigator:
+      type: lifecycle
+      node: /bt_navigator        # Nav2 aborts its own goals if it deactivates; no cancel needed
+
+    collision_monitor_active:
+      type: lifecycle
+      node: /collision_monitor
+
+    collision_monitor:
+      type: collision_monitor    # nav2_msgs/CollisionMonitorState
+      topic: /collision_monitor_state
+      blocking_actions: [STOP]
+      # Recorded, not gated. The collision monitor already stops the robot and
+      # resumes it when the obstacle clears; that is its job. And it publishes
+      # its state only when the action changes, so after a goal ends in a STOP
+      # the last state stays STOP until Nav2 commands the robot again. Gating
+      # new goals on it would deadlock the robot (found against real Nav2 in
+      # demo/turtlebot3). The guard gates on the monitor being active
+      # (collision_monitor_active) and records every STOP it reports.
+      gate: false
+
+    # Add the components your diagnostic aggregator reports, and list the name
+    # in `conditions`:
+    # drive_health:
+    #   type: diagnostics
+    #   topic: /diagnostics_agg
+    #   components: [/Drive, /Sensors/Lidar]
+    #   worst_allowed: WARN
+    #   max_age_sec: 5.0
+    #   cancel_running: true

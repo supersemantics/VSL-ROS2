@@ -1,0 +1,39 @@
+# vsl_guard for the TurtleBot3 demo: config/nav2_guard.yaml with the state on /tmp.
+# Every condition reads what the real Nav2 stack reports.
+vsl_guard:
+  ros__parameters:
+    use_sim_time: true
+    action_type: nav2_msgs/action/NavigateToPose
+    served_action: /vsl_guard/navigate_to_pose
+    upstream_action: /navigate_to_pose
+    ledger_path: /tmp/vsl/guard_ledger.jsonl
+    latch_path: /tmp/vsl/guard_latch.json
+    terminal_state: robot-e-stopped
+    release:
+      authority: Demo safety officer
+      contact: safety@example.test
+    release_poll_sec: 0.5
+    startup_check_sec: 2.0
+    orphaned_goals: cancel
+
+    conditions: [e_stop, cmd_vel_publishers, bt_navigator, collision_monitor_active, collision_monitor]
+    e_stop:
+      type: lock
+      topic: /e_stop
+      terminal: true
+    cmd_vel_publishers:
+      type: sole_publisher
+      topic: /cmd_vel
+      allowed: [/collision_monitor, /docking_server]   # what Nav2 Jazzy's bringup actually runs
+      cancel_running: true
+    bt_navigator:
+      type: lifecycle
+      node: /bt_navigator
+    collision_monitor_active:
+      type: lifecycle
+      node: /collision_monitor
+    collision_monitor:
+      type: collision_monitor
+      topic: /collision_monitor_state
+      blocking_actions: [STOP]
+      gate: false        # recorded, not gated: see config/nav2_guard.yaml

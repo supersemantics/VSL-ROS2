@@ -1,0 +1,64 @@
+# Publishes to PyPI when a release tag (vX.Y.Z) is pushed, through PyPI Trusted
+# Publishing: no token is stored anywhere. PyPI accepts the upload only from
+# this repository, this workflow file and the `pypi` environment.
+name: Publish to PyPI
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro: [humble, jazzy]
+    container:
+      image: ros:${{ matrix.distro }}-ros-base
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test_in_ros.sh ${{ matrix.distro }} && bash scripts/test_colcon.sh ${{ matrix.distro }}
+        shell: bash
+        env:
+          SRC: ${{ github.workspace }}
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install setuptools
+      - name: Check the tag matches the version
+        run: |
+          version=$(python setup.py --version 2>/dev/null | tail -1)
+          xml_version=$(python -c "import xml.etree.ElementTree as E; print(E.parse('package.xml').getroot().findtext('version'))")
+          if [ "v$version" != "$GITHUB_REF_NAME" ] || [ "$version" != "$xml_version" ]; then
+            echo "Tag $GITHUB_REF_NAME, setup.py $version and package.xml $xml_version must agree"; exit 1
+          fi
+      - run: python -m pip install build
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/vsl-ros2
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

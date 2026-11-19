@@ -1,0 +1,42 @@
+# Runs the whole suite in the official ROS 2 images, installed both ways a robot
+# builder would: pip into a venv, and colcon as a ROS package.
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pip:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [humble, jazzy]
+    container:
+      image: ros:${{ matrix.distro }}-ros-base
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test_in_ros.sh ${{ matrix.distro }}
+        shell: bash
+        env:
+          SRC: ${{ github.workspace }}
+
+  colcon:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [humble, jazzy]
+    container:
+      image: ros:${{ matrix.distro }}-ros-base
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test_colcon.sh ${{ matrix.distro }}
+        shell: bash
+        env:
+          SRC: ${{ github.workspace }}

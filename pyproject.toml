@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# The package metadata is in setup.py, not a [project] table: colcon's
+# ament_python builds run the system setuptools (59 on Humble), which cannot
+# read one. setup.py serves both pip and colcon.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

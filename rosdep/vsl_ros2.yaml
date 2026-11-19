@@ -1,0 +1,17 @@
+# rosdep key for vsl-core, which is published on PyPI only (super-semantics-vsl).
+# Register it once per machine, then `rosdep install` resolves vsl_ros2's
+# dependencies, this one through pip:
+#
+#   echo "yaml file://$(pwd)/rosdep/vsl_ros2.yaml" | sudo tee /etc/ros/rosdep/sources.list.d/50-vsl-ros2.list
+#   rosdep update
+#   rosdep install --from-paths src --ignore-src -y
+#
+# On Ubuntu 24.04 (Jazzy), pip installs into the system Python only with
+# PIP_BREAK_SYSTEM_PACKAGES=1 set for the rosdep run.
+python3-super-semantics-vsl-pip:
+  ubuntu:
+    pip:
+      packages: [super-semantics-vsl]
+  debian:
+    pip:
+      packages: [super-semantics-vsl]
