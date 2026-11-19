@@ -32,3 +32,7 @@ The [main README](../README.md) also covers the Python API, for building your ow
 ## Status
 
 Alpha. Tested on ROS 2 Humble and Jazzy (77 tests, installed with pip and with colcon) and end to end against the real Nav2 Jazzy stack driving a simulated TurtleBot3 (44 checks). It has not yet been run on a physical robot: that's what the pilots are for.
+
+## Contact
+
+Pilots, questions and anything that doesn't work: **hello@supersemantics.org**.

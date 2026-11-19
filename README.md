@@ -2,7 +2,7 @@
 
 A [ROS 2](https://docs.ros.org/) (`rclpy`) adapter for [vsl-core](https://github.com/supersemantics/VSL-Core).
 
-> **Robotics teams:** start with the [documentation](docs/README.md): [architecture](docs/architecture.md), [integration guide](docs/integration-guide.md), [configuration](docs/configuration.md), [operations](docs/operations.md) and the [pilot test plan](docs/pilot-test-plan.md).
+> **Robotics teams:** start with the [documentation](docs/README.md): [architecture](docs/architecture.md), [integration guide](docs/integration-guide.md), [configuration](docs/configuration.md), [operations](docs/operations.md) and the [pilot test plan](docs/pilot-test-plan.md). To pilot it or ask anything: **hello@supersemantics.org**.
 
 **The rule this adapter follows: where ROS 2 already decides something, vsl-ros2 reads that decision and never re-implements it.** Nav2's collision monitor already decides when the robot must stop. The diagnostic aggregator decides whether a component is healthy, a lifecycle node knows whether it is active, and an e-stop topic says whether motion is locked out. vsl-ros2 turns each of those verdicts into a vsl-core `Invariant` whose rule simply reads it, so the ROS 2 function stays the authority. Then it adds what ROS 2 does not have.
 
@@ -401,6 +401,10 @@ It passed three runs in a row. Running against real Nav2 and real process signal
 Not yet run on a physical robot, or with MoveIt or ros2_control.
 
 See [CHANGELOG.md](https://github.com/supersemantics/VSL-ROS2/blob/HEAD/CHANGELOG.md).
+
+## Contact
+
+hello@supersemantics.org
 
 ## License
 

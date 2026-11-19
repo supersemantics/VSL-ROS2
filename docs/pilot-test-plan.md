@@ -28,7 +28,7 @@ docker build -f demo/turtlebot3/Dockerfile -t vsl-ros2-tb3-demo .
 docker run --rm vsl-ros2-tb3-demo
 ```
 
-**Pass:** the run ends with `RESULT  44/44 checks passed`. If it doesn't, send us the output: it's our bug, not yours.
+**Pass:** the run ends with `RESULT  44/44 checks passed`. If it doesn't, send the output to hello@supersemantics.org: it's our bug, not yours.
 
 ## Phase 1: your stack in simulation
 
@@ -82,6 +82,8 @@ What we look for in these reports:
 - Whether the audit stays clean.
 
 ## What to send back
+
+Send everything to **hello@supersemantics.org**. Mail us there at any point too: when you start a pilot, when a test fails, or when something in these documents is unclear.
 
 - [ ] The results sheet below.
 - [ ] `vsl_guard_report --json` for each phase.

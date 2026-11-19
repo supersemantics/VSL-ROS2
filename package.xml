@@ -9,7 +9,7 @@
     vsl-core Invariants, gates and supervises action goals, records decisions and ROS 2's
     interventions in a tamper-evident ledger, and holds human-authorised Terminal States.
   </description>
-  <maintainer email="noreply@example.com">Super Semantics</maintainer>
+  <maintainer email="hello@supersemantics.org">Super Semantics</maintainer>
   <license>MIT</license>
   <url type="repository">https://github.com/supersemantics/VSL-ROS2</url>
 

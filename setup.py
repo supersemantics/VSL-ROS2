@@ -33,6 +33,7 @@ setup(
     long_description=(HERE / "README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
     author="Super Semantics",
+    author_email="hello@supersemantics.org",
     license="MIT",
     url="https://github.com/supersemantics/VSL-ROS2",
     project_urls={
