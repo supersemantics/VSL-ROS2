@@ -24,7 +24,7 @@ def _data_files():
 
 setup(
     name="vsl-ros2",
-    version="0.1.0",
+    version="0.1.1",
     description=(
         "ROS 2 (rclpy) adapter for VSL (VERBA Specification Language) -- reads ROS 2's own verdicts "
         "(Nav2 collision monitor, diagnostics, lifecycle, e-stop) as vsl-core Invariants and adds what "

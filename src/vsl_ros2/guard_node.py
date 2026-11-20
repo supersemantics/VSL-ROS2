@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import Any
 
 from vsl_core.constructs import TerminalState
+from vsl_core.exceptions import InvariantViolation
 from vsl_core.governance import GovernanceAuthority, HumanAuthorisedTransition
 from vsl_core.identity import Evidence
 from vsl_core.ledger import JsonlLedgerStore, LedgerEntryType, VerbaLedger, VerificationResult
@@ -205,7 +206,11 @@ def _make_node_class():
             self._sent_ids: set[str] = set()
             self._unsupervised_handled: set[str] = set()
             self._upstream_active: list[str] = []
-            self._known_ids = {e.decision_id for e in self.ledger.store.all_entries() if e.decision_id}
+            self._unsupervised_found = 0  # this run's count, for the startup check's record
+            # One pass over the ledger at start: the goal ids earlier runs decided on (to tell
+            # an orphan from a bypass) and this guard's lifecycle events (to tell how the
+            # previous run ended). Startup time matters: it is the unsupervised gap after a crash.
+            self._known_ids, self._lifecycle = self._scan_ledger()
 
             async def all_supervised(unsupervised: list[str]) -> bool:
                 return not unsupervised
@@ -382,9 +387,19 @@ def _make_node_class():
                                       fallback="goal not sent upstream")
                 goal_handle.abort()
                 return Result()
+            # One snapshot of the verdicts decides the goal and is what gets recorded, so an
+            # "allowed" record can never carry a detail saying the condition had failed.
+            snapshot = {c.name: c.status() for c in self.gating_conditions}
+            refused = self._refusal_from(snapshot)
+            if refused is not None:  # the robot changed between accepting and forwarding
+                with self._supervision_lock:
+                    self._sent_ids.discard(decision_id)
+                self._record_decision(decision_id, refused, fallback="goal not sent upstream", snapshot=snapshot)
+                goal_handle.abort()
+                return Result()
             # Record first: if the decision can't be recorded, the goal is not sent
             # (the exception aborts the planner's goal in _execute). Fail closed.
-            self._record_decision(decision_id, None)
+            self._record_decision(decision_id, None, snapshot=snapshot)
             try:
                 sent = self.upstream.send_goal_async(
                     goal_handle.request,
@@ -403,11 +418,13 @@ def _make_node_class():
                 goal_handle.abort()
                 return Result()
             if sent.result() is None or not sent.result().accepted:
+                with self._supervision_lock:
+                    self._sent_ids.discard(decision_id)  # never runs upstream: nothing to track
                 self.get_logger().error(f"{self.upstream_action} rejected the goal")
                 goal_handle.abort()
                 return Result()
             upstream_handle = sent.result()
-            result_future = upstream_handle.get_result_async()
+            result_future = self.upstream.result_future(upstream_handle)  # shared with goal tracking
             cancel_sent = False
             while not result_future.done():
                 if self._destroyed:  # the node is going away; its next start adopts nothing, cancels the orphan
@@ -464,16 +481,37 @@ def _make_node_class():
 
         # -- the application's record (vsl-ros2's gates never write) --------------
 
-        def _record_decision(self, decision_id: str, blocked: VSLGateBlocked | None, fallback: str = "") -> None:
+        def _refusal_from(self, snapshot: dict[str, Any]) -> VSLGateBlocked | None:
+            """The decision a snapshot of verdicts makes: None to forward, else why not."""
+            if self.latch.tripped:
+                return VSLGateBlocked(
+                    f"in terminal state '{self.latch.terminal_state_name}' until a human-authorised transition",
+                    target=self.upstream_action, denial=self.latch.tripped_by, latched=True,
+                )
+            for c in self.gating_conditions:  # the chain's order
+                if not snapshot[c.name].holds:
+                    violation = InvariantViolation(
+                        reason=f"Invariant '{c.name}' violated", identity_key=self.identity, invariant_name=c.name,
+                    )
+                    return VSLGateBlocked(violation.reason, target=self.upstream_action, denial=violation)
+            return None
+
+        def _record_decision(
+            self, decision_id: str, blocked: VSLGateBlocked | None, fallback: str = "",
+            snapshot: dict[str, Any] | None = None,
+        ) -> None:
+            """Record a goal decision. With a snapshot, the details recorded are the
+            verdicts the decision was made from; without one, the current ones."""
             subject = f"{self.action_type_name} goal"
             denied = getattr(blocked.denial, "invariant_name", None) if blocked and not blocked.latched else None
             cause = None
             if blocked is None or denied:
                 for c in self.gating_conditions:  # the chain runs in this order
                     allowed = c.name != denied
+                    status = snapshot[c.name] if snapshot is not None else c.status()
                     entry = self.ledger.write_gate_decision(
                         identity_key=self.identity, primitive_name=c.name, allowed=allowed, decision_id=decision_id,
-                        extra_payload={"subject": subject, "detail": c.status().detail},
+                        extra_payload={"subject": subject, "detail": status.detail},
                     )
                     if not allowed:
                         cause = entry
@@ -512,14 +550,17 @@ def _make_node_class():
                 caused_by=cause.entry_id, payload={"fallback": "cancel the running goal", "reason": blocked.reason},
             )
 
-        def _record_cancel_done(self, active: ActiveGoal, blocked: VSLGateBlocked, accepted: bool) -> None:
+        def _record_cancel_done(
+            self, active: ActiveGoal, blocked: VSLGateBlocked, accepted: bool, note: str | None = None,
+        ) -> None:
             held = self._cancelling.pop(active.goal_id, None)
+            verified = note or ("upstream accepted the cancel" if accepted else "upstream refused the cancel; goal still running")
             self.ledger.write_verification(
                 identity_key=self.identity,
                 result=VerificationResult.SUFFICIENT if accepted else VerificationResult.INSUFFICIENT,
                 decision_id=active.goal_id,
                 caused_by=getattr(held, "entry_id", None),
-                extra_payload={"verified": "upstream accepted the cancel" if accepted else "upstream refused the cancel; goal still running"},
+                extra_payload={"verified": verified},
             )
 
         # -- state on /diagnostics ---------------------------------------------------------
@@ -556,8 +597,13 @@ def _make_node_class():
 
         def _on_upstream_status(self, msg: Any) -> None:
             active = [goal_id_hex(s.goal_info.goal_id) for s in msg.status_list if s.status in _STATUS_ACTIVE]
+            finished = {goal_id_hex(s.goal_info.goal_id) for s in msg.status_list if s.status not in _STATUS_ACTIVE}
             with self._supervision_lock:
                 self._upstream_active = active
+                # A goal the server reports finished needs no more bookkeeping: without
+                # this, a long-running guard keeps every goal id it ever forwarded.
+                self._sent_ids -= finished
+                self._unsupervised_handled -= finished
             self._check_upstream_supervision()
 
         def _check_upstream_supervision(self) -> None:
@@ -581,6 +627,7 @@ def _make_node_class():
                 if goal_id in self._unsupervised_handled:
                     return
                 self._unsupervised_handled.add(goal_id)
+                self._unsupervised_found += 1
             kind = "orphaned" if goal_id in self._known_ids else "foreign"
             subject = f"{self.upstream_action} goal"
             cause = self.ledger.write_gate_decision(
@@ -602,15 +649,9 @@ def _make_node_class():
                 LedgerEntryType.PRE_NODE, identity_key=self.identity, decision_id=goal_id, caused_by=cause.entry_id,
                 payload={"fallback": "cancel the unsupervised goal", "unsupervised": kind},
             )
-            request = self._CancelGoal.Request()
-            request.goal_info.goal_id.uuid = list(bytes.fromhex(goal_id))
             self.get_logger().warning(f"cancelling {kind} goal {goal_id[:8]} on {self.upstream_action}: {_UNSUPERVISED[kind]}")
 
-            def done(future: Any) -> None:
-                try:
-                    accepted = cancel_accepted(future.result())
-                except Exception:  # noqa: BLE001
-                    accepted = False
+            def done(accepted: bool) -> None:
                 self.ledger.write_verification(
                     identity_key=self.identity,
                     result=VerificationResult.SUFFICIENT if accepted else VerificationResult.INSUFFICIENT,
@@ -620,7 +661,28 @@ def _make_node_class():
                 if not accepted:
                     self.get_logger().error(f"{self.upstream_action} refused to cancel unsupervised goal {goal_id[:8]}; it is still running")
 
+            self._cancel_by_id(goal_id, done)  # readiness was checked above, before recording
+
+        def _cancel_by_id(self, goal_id: str, on_done: Callable[[bool], None], wait_ready_sec: float = 0.0) -> bool:
+            """Ask the upstream server to cancel a goal by its id, through the action's own
+            cancel service: no client-side goal handle needed. ``on_done(accepted)`` runs
+            with the server's answer. Returns False, without calling ``on_done``, if the
+            cancel service is not available (after waiting up to ``wait_ready_sec``)."""
+            if not self._cancel_client.service_is_ready():
+                if wait_ready_sec <= 0 or not self._cancel_client.wait_for_service(timeout_sec=wait_ready_sec):
+                    return False
+            request = self._CancelGoal.Request()
+            request.goal_info.goal_id.uuid = list(bytes.fromhex(goal_id))
+
+            def done(future: Any) -> None:
+                try:
+                    accepted = cancel_accepted(future.result())
+                except Exception:  # noqa: BLE001
+                    accepted = False
+                on_done(accepted)
+
             self._cancel_client.call_async(request).add_done_callback(done)
+            return True
 
         # -- the guard's own lifecycle -----------------------------------------------------
 
@@ -633,16 +695,21 @@ def _make_node_class():
             names = sorted(n for n in all_names if n not in ("use_sim_time",))
             return {p.name: p.value for p in self.get_parameters(names)}
 
-        def _lifecycle_events(self) -> list[Any]:
-            return [
-                e for e in self.ledger.store.all_entries()
-                if e.identity_key == self.identity and e.payload.get("event") in (EVENT_STARTED, EVENT_STOPPED)
-            ]
+        def _scan_ledger(self) -> tuple[set[str], list[Any]]:
+            """Read the ledger once: every decision id, and this guard's start/stop events."""
+            ids: set[str] = set()
+            events: list[Any] = []
+            for e in self.ledger.store.all_entries():
+                if e.decision_id:
+                    ids.add(e.decision_id)
+                if e.identity_key == self.identity and e.payload.get("event") in (EVENT_STARTED, EVENT_STOPPED):
+                    events.append(e)
+            return ids, events
 
         def _record_start(self) -> None:
             spec = self._specification()
             spec_hash = hashlib.sha256(json.dumps(spec, sort_keys=True, default=str).encode()).hexdigest()
-            events = self._lifecycle_events()
+            events = self._lifecycle
             last = events[-1] if events else None
             if last is None:
                 previous_run = "first run"
@@ -691,7 +758,7 @@ def _make_node_class():
             self._startup_check = None
             timer.cancel()
             with self._supervision_lock:
-                handled = len(self._unsupervised_handled)
+                handled = self._unsupervised_found
             self.ledger.write_verification(
                 identity_key=self.identity, result=VerificationResult.SUFFICIENT, caused_by=held.entry_id,
                 extra_payload={
@@ -731,19 +798,18 @@ def _make_node_class():
             for goal_id in goal_ids:
                 target = ActiveGoal(goal=None, goal_handle=None, goal_id=goal_id)
                 self._record_cancel(target, blocked)
-                request = self._CancelGoal.Request()
-                request.goal_info.goal_id.uuid = list(bytes.fromhex(goal_id))
-                state = {"done": False}
+                state = {"done": False, "ok": False}
 
-                def done(f: Any, a: ActiveGoal = target, s: dict = state) -> None:
-                    try:
-                        ok = cancel_accepted(f.result())
-                    except Exception:  # noqa: BLE001
-                        ok = False
+                def done(ok: bool, a: ActiveGoal = target, s: dict = state) -> None:
                     self._record_cancel_done(a, blocked, ok)
-                    s["done"] = True
+                    s["done"], s["ok"] = True, ok
 
-                self._cancel_client.call_async(request).add_done_callback(done)
+                if not self._cancel_by_id(goal_id, done, wait_ready_sec=1.0):
+                    # No cancel service to ask: say so, and leave the goal to the next
+                    # start's upstream_goals_supervised check.
+                    self._record_cancel_done(target, blocked, False,
+                                             note="cancel service unavailable; the next start cancels it as an orphan")
+                    state["done"] = True
                 pending.append(state)
             deadline = time.monotonic() + timeout_sec
             while spin is not None and any(not s["done"] for s in pending) and time.monotonic() < deadline:
@@ -752,7 +818,7 @@ def _make_node_class():
                 identity_key=self.identity, drift_detected=False,
                 extra_payload={
                     "event": EVENT_STOPPED, "goals_cancelled": len(pending),
-                    "cancels_confirmed": sum(s["done"] for s in pending),
+                    "cancels_confirmed": sum(s["ok"] for s in pending),
                 },
             )
             self.get_logger().info(f"stopped cleanly; cancelled {len(pending)} running goal(s)")

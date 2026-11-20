@@ -383,11 +383,23 @@ class GatedActionClient:
         self._client = action_client
         self._guard = _guard(gates, getattr(action_client, "_action_name", None), kwargs)
         self._active: dict[str, ActiveGoal] = {}
+        self._results: dict[str, Any] = {}  # goal id -> the one result future asked for
         self._active_lock = threading.Lock()
 
     @property
     def action_client(self) -> Any:
         return self._client
+
+    def result_future(self, handle: Any) -> Any:
+        """The goal's result future, asked of the server once per goal. Callers that
+        need the result (tracking here, the caller's own wait) share it, rather than
+        each sending the server another GetResult request."""
+        goal_id = goal_id_hex(handle.goal_id)
+        with self._active_lock:
+            future = self._results.get(goal_id)
+            if future is None:
+                future = self._results[goal_id] = handle.get_result_async()
+            return future
 
     @property
     def gates(self) -> tuple:
@@ -435,11 +447,12 @@ class GatedActionClient:
         active = ActiveGoal(goal=goal, goal_handle=handle, goal_id=goal_id_hex(handle.goal_id))
         with self._active_lock:
             self._active[active.goal_id] = active
-        handle.get_result_async().add_done_callback(lambda _done: self._finished(active.goal_id))
+        self.result_future(handle).add_done_callback(lambda _done: self._finished(active.goal_id))
 
     def _finished(self, goal_id: str) -> None:
         with self._active_lock:
             self._active.pop(goal_id, None)
+            self._results.pop(goal_id, None)
 
     def cancel_goal(self, active: ActiveGoal, reason: VSLGateBlocked) -> Any:
         """Ask the server to cancel one tracked goal (once). Returns the cancel
