@@ -295,6 +295,8 @@ def test_vsl_guard_node(tmp_path):
         assert result_status(h) == 4
 
         assert nav2.goals == [1.0, 1.5, 2.2, 2.5, 4.5, 7.0]  # nothing refused ever reached Nav2
+        # Finished goals leave no bookkeeping behind (a long-running guard must not grow).
+        assert spin_until(lambda: not guard._sent_ids and not guard.upstream.active_goals)
         report = guard.ledger.audit()
         assert report.all_passed, report.violations
         assert guard.ledger.verify_integrity()

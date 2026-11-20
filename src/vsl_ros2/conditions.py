@@ -281,11 +281,14 @@ class LifecycleCondition(Condition):
         required_state: str = "active",
         name: str | None = None,
         query_on_start: bool = True,
+        query_timeout_sec: float = 2.0,
     ) -> None:
         target = "/" + target_node.strip("/")
         super().__init__(name or f"ros2.lifecycle:{target}", f"{target} is {required_state}.")
         self.target_node = target
         self.required_state = required_state.lower()
+        self.query_timeout_sec = query_timeout_sec
+        self._pending_since: float | None = None  # when the outstanding get_state was sent
         from lifecycle_msgs.msg import TransitionEvent
 
         node.create_subscription(TransitionEvent, f"{target}/transition_event", self._on_event, 10)
@@ -298,17 +301,23 @@ class LifecycleCondition(Condition):
             self._timer = steady_timer(node, 0.5, self._query)
 
     def _query(self) -> None:
+        """Ask get_state until the state is known. A reply that never comes (a busy or
+        restarting node, a lost response) is asked again after query_timeout_sec: a node
+        that is already active publishes no further transition_event to learn it from."""
         if self.status().heard:
             self._timer.cancel()
             return
+        if self._pending_since is not None and time.monotonic() - self._pending_since < self.query_timeout_sec:
+            return  # an answer may still come
         if self._client.service_is_ready():
-            self._timer.cancel()
+            self._pending_since = time.monotonic()
             self._client.call_async(self._request).add_done_callback(self._on_state)
 
     def _on_state(self, future: Any) -> None:
+        self._pending_since = None
         try:
             label = future.result().current_state.label
-        except Exception:  # noqa: BLE001 -- unknown stays unknown, so the condition fails closed
+        except Exception:  # noqa: BLE001 -- unknown stays unknown (fails closed); asked again next tick
             return
         if not self.status().heard:  # a transition event may have arrived meanwhile
             self._apply(label)

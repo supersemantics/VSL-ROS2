@@ -168,6 +168,42 @@ def test_lifecycle_seeded_by_get_state():
     assert c.holds()
 
 
+def test_lifecycle_query_retries_a_lost_or_failed_reply():
+    node = FakeNode()
+    calls = []
+
+    class Pending:
+        def __init__(self):
+            self.cb = None
+
+        def add_done_callback(self, cb):
+            self.cb = cb
+
+    def call_async(_request):
+        calls.append(Pending())
+        return calls[-1]
+
+    node.create_client = lambda srv, name: SimpleNamespace(service_is_ready=lambda: True, call_async=call_async)
+    c = LifecycleCondition(node, "/bt_navigator", query_timeout_sec=0.05)
+    node.tick()
+    node.tick()
+    assert len(calls) == 1  # asked once, the answer may still come
+    time.sleep(0.06)
+    node.tick()
+    assert len(calls) == 2  # no answer in time: asked again
+
+    def failing():
+        raise RuntimeError("service went away")
+
+    calls[-1].cb(SimpleNamespace(result=failing))
+    node.tick()
+    assert len(calls) == 3 and not c.holds()  # an error answer: asked again, still fails closed
+    calls[-1].cb(SimpleNamespace(result=lambda: SimpleNamespace(current_state=SimpleNamespace(label="active"))))
+    assert c.holds()
+    node.tick()
+    assert len(calls) == 3  # known now: no more queries
+
+
 def test_collision_monitor():
     node = FakeNode()
     c = CollisionMonitorCondition(node)

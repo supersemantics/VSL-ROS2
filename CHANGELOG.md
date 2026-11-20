@@ -2,7 +2,41 @@
 
 What changed in each release, and why. Newest first.
 
-## 0.1.0 (unreleased, tag `v0.1.0` on merge): first release
+## 0.1.1 (unreleased, tag `v0.1.1` on merge): the rest of the pre-release code review
+
+0.1.0 shipped with the review's four pilot-critical fixes. These are the other six: one that could
+leave the guard refusing every goal, one about the record's accuracy, and four efficiency and
+duplication fixes. Configuration and behaviour are otherwise unchanged.
+
+- **A lost lifecycle reply no longer leaves the guard stuck.** `LifecycleCondition` asked
+  `get_state` once. If the reply never came, or came back as an error, the condition stayed
+  unknown (not holding) until the node happened to publish a transition. A Nav2 server that was
+  already active never does, so the guard rejected every goal until Nav2 restarted. It now asks
+  again after `query_timeout_sec` (2 s) or on an error, until the state is known.
+- **The record shows the verdicts a goal was decided on.** The guard used to record each
+  condition's detail at write time, which could differ from the verdict actually used. A condition
+  flipping in between produced "allowed" next to "e-stop engaged". Forwarding now takes one
+  snapshot of the verdicts, decides from it and records it. A goal the snapshot refuses is not
+  sent, and is recorded as such.
+- **Startup reads the ledger once,** not twice. Startup time is part of the unsupervised gap after
+  a crash, and the ledger grows for the robot's whole life.
+- **Finished goals leave no bookkeeping behind.** The guard kept every goal id it ever forwarded or
+  found unsupervised, and scanned them on every status message. Ids are now dropped once the
+  upstream server reports the goal finished, or when it rejects it.
+- **One cancel-by-id path.** Cancelling an unsupervised goal and cancelling at shutdown were two
+  copies of the same code. The shutdown copy didn't check the cancel service was there, so it
+  could wait its whole timeout for answers that would never come. It now uses the shared helper,
+  waits up to 1 s for the service, and otherwise records "cancel service unavailable; the next
+  start cancels it as an orphan". `guard_stopped`'s `cancels_confirmed` now counts cancels the
+  server accepted, not just answered.
+- **One GetResult request per goal.** Goal tracking and the guard's own wait each asked Nav2 for
+  the result. `GatedActionClient.result_future(handle)` now asks once and shares it.
+
+**Tests:** 79 pass on ROS 2 Humble and Jazzy, installed with pip and built with colcon, including
+new unit tests for the lifecycle retry and the single result request; the live guard test checks
+that no goal ids remain once goals finish. The real-Nav2 TurtleBot3 demo still passes 44/44.
+
+## 0.1.0 (2026-11-19, pushed to `main`; tag `v0.1.0` pending): first release
 
 The first VSL adapter for robots. Its rule: where ROS 2 already decides something, vsl-ros2 reads
 that decision as a vsl-core Invariant and never re-implements it. It adds only what ROS 2 lacks.

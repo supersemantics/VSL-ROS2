@@ -44,7 +44,7 @@ from .runner import DEFAULT_TIMEOUT_SEC, GateRunner, TerminalLatch, VSLGateBlock
 from .supervisor import GoalSupervisor, cancel_accepted
 from .witness import InterventionWitness
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # write_gate_decision / write_handover and the 2026.10 Gamma rule are what this
 # package's docs and examples rely on; handovers arrived in vsl-core 0.3.0.

@@ -42,9 +42,11 @@ class FakeGoalHandle:
         self.goal_id = SimpleNamespace(uuid=[n] * 16)
         self.result_future = FakeFuture()
         self.cancel_requests = 0
+        self.result_requests = 0
         self.cancel_ok = cancel_ok
 
     def get_result_async(self):
+        self.result_requests += 1  # each call is a GetResult request to the server
         return self.result_future
 
     def cancel_goal_async(self):
@@ -105,6 +107,15 @@ def test_accepted_goals_are_tracked_until_they_finish():
     assert active.goal_id == goal_id_hex(handle.goal_id) == ("01" * 16)
     handle.result_future.set_result(SimpleNamespace(status=4))
     assert client.active_goals == []
+
+
+def test_one_result_request_per_goal():
+    raw = FakeActionClient()
+    client = GatedActionClient(raw, speed_headroom_gate())
+    client.send_goal_async(Twist(0.1))
+    handle = raw.accept()  # tracking asks for the result
+    assert client.result_future(handle) is handle.result_future  # the caller's wait shares it
+    assert handle.result_requests == 1
 
 
 def test_rejected_goals_are_not_tracked():

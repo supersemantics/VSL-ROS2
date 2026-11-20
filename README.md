@@ -384,7 +384,7 @@ docker run --rm -v "$PWD:/src:ro" ros:jazzy-ros-base bash /src/scripts/test_colc
 
 ## Status
 
-Alpha. Conformance-suite green. 77 tests pass on ROS 2 Jazzy (Python 3.12) and Humble (Python 3.10) in the official `ros:*-ros-base` images, both when installed with pip and when built and tested with colcon. In those tests Nav2 is simulated at the interfaces the guard reads.
+Alpha. Conformance-suite green. 79 tests pass on ROS 2 Jazzy (Python 3.12) and Humble (Python 3.10) in the official `ros:*-ros-base` images, both when installed with pip and when built and tested with colcon. In those tests Nav2 is simulated at the interfaces the guard reads.
 
 **Against real Nav2:** [`demo/turtlebot3/`](demo/turtlebot3/README.md) runs `vsl_guard` in front of the full Nav2 Jazzy stack driving a TurtleBot3 in Gazebo, headless in one container. It passes 44 checks, measured from odometry and Nav2's own topics:
 
