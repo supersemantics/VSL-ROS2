@@ -2,7 +2,7 @@
 
 What changed in each release, and why. Newest first.
 
-## 0.2.0 (unreleased): vsl-core 0.4, no F2 claims
+## 0.2.0 (2026-11-27, tag `v0.2.0`): vsl-core 0.4, no F2 claims
 
 **Before:** vsl-ros2 required vsl-core 0.3. Every condition's Invariant, and `vsl_guard`'s
 supervision Invariant, carried `NO_MODEL` (F1 True, F2 `NONE`, level LOW), and `ROS2Adapter` read
