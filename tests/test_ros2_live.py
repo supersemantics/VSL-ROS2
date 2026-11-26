@@ -25,7 +25,7 @@ from vsl_core.constructs import Invariant, PreNode, TerminalState  # noqa: E402
 from vsl_core.governance import GovernanceAuthority, HumanAuthorisedTransition  # noqa: E402
 from vsl_core.identity import Evidence  # noqa: E402
 from vsl_core.ledger import GATE_ALLOWED_KEY, InMemoryLedgerStore, VerbaLedger  # noqa: E402
-from vsl_core.metrics import AssuranceBasis, F2Modification, GammaEstimate  # noqa: E402
+from vsl_core.metrics import GammaEstimate  # noqa: E402
 
 from vsl_ros2 import (  # noqa: E402
     GatedActionClient,
@@ -38,7 +38,6 @@ from vsl_ros2 import (  # noqa: E402
     gated_goal_callback,
 )
 
-NO_MODEL = AssuranceBasis(f1_pre_commitment=True, f2_modification=F2Modification.NONE)
 MAX_SPEED = 1.0
 E_STOP = TerminalState(name="robot-e-stopped", description="Motion halted pending human review.")
 
@@ -84,10 +83,10 @@ def _gates(ledger: VerbaLedger, identity: str):
         return holds
 
     speed = adapter.compile_pre_node(
-        PreNode(name="speed-headroom", description="d", monitor=headroom, assurance_basis=NO_MODEL, gamma_threshold=1.1)
+        PreNode(name="speed-headroom", description="d", monitor=headroom, gamma_threshold=1.1)
     )
     sane = adapter.compile_invariant(
-        Invariant(name="finite-command", description="d", rule=finite, assurance_basis=NO_MODEL, on_violation=E_STOP)
+        Invariant(name="finite-command", description="d", rule=finite, on_violation=E_STOP)
     )
     return [sane, speed]
 
@@ -154,7 +153,7 @@ def test_service_and_client(executor):
         return request.data is False  # in this test, True means "release over a person"
 
     gate = ROS2Adapter(identity_key="/vsl_gripper").compile_invariant(
-        Invariant(name="not-over-person", description="d", rule=not_over_person, assurance_basis=NO_MODEL)
+        Invariant(name="not-over-person", description="d", rule=not_over_person)
     )
     create_gated_service(server, SetBool, "/vsl_live/release", release, gate)
     raw_client = caller.create_client(SetBool, "/vsl_live/release")
@@ -191,7 +190,7 @@ def test_action_goal_rejected_before_execute(executor):
         return GammaEstimate(gamma_hat=10.0 / goal.order if goal.order > 0 else 0.0)
 
     gate = ROS2Adapter(identity_key="/vsl_counter").compile_pre_node(
-        PreNode(name="order-headroom", description="d", monitor=small_order, assurance_basis=NO_MODEL, gamma_threshold=1.1)
+        PreNode(name="order-headroom", description="d", monitor=small_order, gamma_threshold=1.1)
     )
 
     def execute(goal_handle):

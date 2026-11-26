@@ -248,7 +248,24 @@ def test_invariant_metadata():
     c = LockCondition(FakeNode(), "/e_stop", name="ros2.e_stop")
     inv = c.invariant(on_violation=E_STOPPED)
     assert inv.name == "ros2.e_stop" and inv.on_violation is E_STOPPED
-    assert inv.assurance_basis.f1_pre_commitment and inv.assurance_basis.f2_modification.value == "NONE"
+
+
+def test_invariant_takes_no_assurance_basis():
+    import warnings
+
+    c = LockCondition(FakeNode(), "/e_stop", name="ros2.e_stop")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        c.invariant(on_violation=E_STOPPED)
+
+
+def test_invariant_still_accepts_a_deprecated_basis():
+    import pytest
+    from vsl_ros2 import NO_MODEL
+
+    c = LockCondition(FakeNode(), "/e_stop", name="ros2.e_stop")
+    with pytest.warns(FutureWarning, match="assurance_basis"):
+        c.invariant(assurance_basis=NO_MODEL)
 
 
 # -- persistent latch -------------------------------------------------------------

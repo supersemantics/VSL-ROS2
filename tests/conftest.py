@@ -10,11 +10,10 @@ from enum import Enum
 import pytest
 
 from vsl_core.constructs import Invariant, PreNode, TerminalState
-from vsl_core.metrics import AssuranceBasis, F2Modification, GammaEstimate
+from vsl_core.metrics import GammaEstimate
 
 from vsl_ros2 import ROS2Adapter
 
-NO_MODEL = AssuranceBasis(f1_pre_commitment=True, f2_modification=F2Modification.NONE)
 MAX_SPEED = 1.0
 
 E_STOP = TerminalState(name="robot-e-stopped", description="Motion halted pending human review.")
@@ -71,7 +70,6 @@ def speed_headroom_gate():
             name="speed-headroom",
             description="Commanded speed must stay inside the limit with margin.",
             monitor=headroom,
-            assurance_basis=NO_MODEL,
             gamma_threshold=1.1,
         )
     )
@@ -87,7 +85,6 @@ def finite_speed_invariant(on_violation=E_STOP):
             name="finite-command",
             description="A NaN or infinite command means the planner is broken.",
             rule=finite,
-            assurance_basis=NO_MODEL,
             on_violation=on_violation,
         )
     )

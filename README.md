@@ -222,7 +222,7 @@ supervisor = GoalSupervisor(self, nav, gates=[publishers_gate])
 
 ## Conditions
 
-A `Condition` holds one ROS 2 function's latest verdict, fed by the node's own callbacks. `condition.invariant()` returns a vsl-core `Invariant` (F1 True, F2 `NONE`: no model at the guarded call) whose rule reads that verdict. Compile it with `ROS2Adapter.compile_invariant` like any other Invariant.
+A `Condition` holds one ROS 2 function's latest verdict, fed by the node's own callbacks. `condition.invariant()` returns a vsl-core `Invariant` whose rule reads that verdict. Compile it with `ROS2Adapter.compile_invariant` like any other Invariant.
 
 | Condition | Reads | Holds while |
 |---|---|---|
@@ -324,21 +324,17 @@ vsl-core gates are `async` and rclpy executors aren't asyncio loops, so the wrap
 
 Nothing in the adapter or its gates writes to a `VerbaLedger`. The application records its own gate decisions with `write_gate_decision()`, and closes a block with a `PRE_NODE` (the fallback: the goal not sent) and a `VERIFICATION`, as `vsl_guard`'s `_record_decision` does. The `InterventionWitness`, which the application constructs explicitly with its ledger, records ROS 2's interventions. Record decisions that change something (goals, service calls, interventions), not every 50 Hz message.
 
+To record the side effect itself, call `ledger.write_action(identity_key=..., action_name=..., decision_id=...)` where your node sends the goal or handles the request, with the same `decision_id` as its gate decisions. `ledger.enforcement(decision_id)` then reads `BEFORE_ACTION` when every gate decision came before the action (or a denial stopped it), and `AFTER_ACTION` when the action came first. `vsl_guard` doesn't write action records yet.
+
 For a PreNode of your own, vsl-core never measures Gamma: your monitor computes `gamma_hat` as a ratio where 1.0 is break-even, returns `0.0` when its input is missing or stale, and keeps thresholds above 1.0 (`ROBUST_GAMMA_HIGH_STAKES_THRESHOLD`, 1.2, near people).
 
 ## Multi-robot systems: handovers and Cluster Gamma
 
 When one node or robot hands part of a task to another (a fleet manager assigning a pick), record the hand-off before the receiver acts with `ledger.write_handover(...)` (vsl-core 0.3.0), and pass its `entry_id` as `caused_by` on the receiver's first gate decision. Robots sharing an aisle, a lift or a workcell form a `vsl_core.cluster.Cluster`: every robot's gates can pass while the shared resource is still unsafe, so put the Cluster's Invariants on whichever node arbitrates that resource.
 
-## The F1/F2 assurance distinction
+## What a gate reports
 
-| Gate | F1 | F2 | Level |
-|---|---|---|---|
-| A ROS 2 verdict (collision monitor, diagnostics, lifecycle, e-stop) before a goal | True | `NONE` | LOW |
-| Gate before a hosted model (an LLM task planner, a hosted VLM) whose prompt the application writes | True | `PARTIAL` | MEDIUM |
-| Gate before a self-hosted policy where the application steers logits or activations | True | `FULL` | HIGH |
-
-The level measures influence on a model, not enforcement: a LOW gate still blocks every goal it denies. `ROS2Adapter` warns when a monitor or rule claims `FULL` but appears to call a hosted model API, and when a PreNode sets a `Fallback` the wrappers don't consume.
+Gates take no assurance claim: build a `PreNode` or `Invariant` from its name, description and monitor or rule, and a condition's `invariant()` needs nothing more. Whether a gate ran before the side effect is computed from the ledger, not declared (see [vsl-core's "What a gate reports"](https://github.com/supersemantics/VSL-Core#what-a-gate-reports)). Code written for vsl-ros2 0.1 that still passes `assurance_basis` (or `NO_MODEL`) gets a `FutureWarning` from vsl-core; delete the argument. `ROS2Adapter` still warns when a PreNode sets a `Fallback` the wrappers don't consume.
 
 ## Layout
 
