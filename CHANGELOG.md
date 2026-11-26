@@ -2,7 +2,23 @@
 
 What changed in each release, and why. Newest first.
 
-## 0.1.1 (unreleased, tag `v0.1.1` on merge): the rest of the pre-release code review
+## 0.2.0 (unreleased): vsl-core 0.4, no F2 claims
+
+**Before:** vsl-ros2 required vsl-core 0.3. Every condition's Invariant, and `vsl_guard`'s
+supervision Invariant, carried `NO_MODEL` (F1 True, F2 `NONE`, level LOW), and `ROS2Adapter` read
+a monitor's or rule's source to warn when it claimed `F2Modification.FULL` but appeared to call a
+hosted model API. The README had a table of F1/F2 levels.
+
+**After:** vsl-core is `super-semantics-vsl>=0.4,<0.5` (the import check needs 0.4.0). Gates are
+built without an assurance basis, and the hosted-API heuristic is gone. `Condition.invariant()`
+still takes `assurance_basis` but passes it on only when given, so vsl-core warns. `NO_MODEL`
+still imports and is deprecated, removed in 1.0. The README's F1/F2 section is now "What a gate
+reports", and the ledger section shows `write_action()` and `enforcement()`. `vsl_guard`'s
+behaviour and its record are unchanged.
+
+**Why:** vsl-core 0.4.0 no longer takes a declared F2 level; enforcement is computed, not claimed.
+
+## 0.1.1 (2026-11-20, tag `v0.1.1`): the rest of the pre-release code review
 
 0.1.0 shipped with the review's four pilot-critical fixes. These are the other six: one that could
 leave the guard refusing every goal, one about the record's accuracy, and four efficiency and

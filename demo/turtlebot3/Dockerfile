@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # vsl-core comes from PyPI (the rosdep key in rosdep/vsl_ros2.yaml does the same).
-RUN PIP_BREAK_SYSTEM_PACKAGES=1 pip install --no-cache-dir "super-semantics-vsl>=0.3,<0.4"
+RUN PIP_BREAK_SYSTEM_PACKAGES=1 pip install --no-cache-dir "super-semantics-vsl>=0.4,<0.5"
 
 COPY . /ws/src/vsl_ros2
 RUN rm -rf /ws/src/vsl_ros2/src/*.egg-info \

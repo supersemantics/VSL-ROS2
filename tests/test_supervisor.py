@@ -152,9 +152,9 @@ def test_supervisor_cancels_when_a_must_hold_gate_denies():
         return state["healthy"]
 
     from vsl_core.constructs import Invariant
-    from vsl_ros2 import NO_MODEL, ROS2Adapter
+    from vsl_ros2 import ROS2Adapter
 
-    health = ROS2Adapter().compile_invariant(Invariant(name="diag", description="d", rule=healthy, assurance_basis=NO_MODEL))
+    health = ROS2Adapter().compile_invariant(Invariant(name="diag", description="d", rule=healthy))
     client = GatedActionClient(raw, [health, speed_headroom_gate()])
     reasons = []
     supervisor = GoalSupervisor(node, client, gates=[health], on_cancel=lambda a, b: reasons.append(b.denial.invariant_name))

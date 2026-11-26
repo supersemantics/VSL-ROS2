@@ -36,9 +36,9 @@ from typing import Any
 from vsl_core.constructs import Invariant, TerminalState
 from vsl_core.metrics import AssuranceBasis, F2Modification
 
-# A condition reads a ROS function's verdict; no model is involved at the
-# guarded call, so the honest basis is F1 True, F2 NONE (LOW). The level is
-# about influence on a model, not enforcement: the gate still blocks.
+# Deprecated: vsl-core 0.4 takes no assurance basis, and a condition's
+# Invariant is built without one. Kept so `from vsl_ros2 import NO_MODEL` still
+# imports; passing it to a PreNode or Invariant makes vsl-core warn. Removed in 1.0.
 NO_MODEL = AssuranceBasis(f1_pre_commitment=True, f2_modification=F2Modification.NONE)
 
 
@@ -126,7 +126,7 @@ class Condition:
         self,
         *,
         on_violation: TerminalState | None = None,
-        assurance_basis: AssuranceBasis = NO_MODEL,
+        assurance_basis: AssuranceBasis | None = None,
         name: str | None = None,
         description: str | None = None,
     ) -> Invariant:
@@ -138,18 +138,22 @@ class Condition:
         ``on_violation`` TerminalState only for verdicts that must hold the robot
         until a human reviews it (an e-stop), not for ones that clear by
         themselves (an obstacle in the stop zone).
+
+        ``assurance_basis`` is deprecated: vsl-core 0.4 ignores it and warns.
+        Leave it out.
         """
         condition = self
 
         async def rule(_candidate_input: Any) -> bool:
             return condition.holds()
 
+        deprecated = {} if assurance_basis is None else {"assurance_basis": assurance_basis}
         return Invariant(
             name=name or self.name,
             description=description or self.description,
             rule=rule,
-            assurance_basis=assurance_basis,
             on_violation=on_violation,
+            **deprecated,
         )
 
     # -- change notification --------------------------------------------------

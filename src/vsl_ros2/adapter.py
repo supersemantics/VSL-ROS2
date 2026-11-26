@@ -16,83 +16,14 @@ any code path that is about to act.
 
 from __future__ import annotations
 
-import inspect
 import warnings
 from typing import Any, Callable
 
 from vsl_core.conformance.protocol import CompiledGate
 from vsl_core.constructs import Fallback, Invariant, PreNode
 from vsl_core.exceptions import AutomationDeniedException, InvariantViolation
-from vsl_core.metrics import F2Modification
 
 _DEFAULT_FALLBACK = Fallback()
-
-# Source-text markers for hosted, black-box model APIs. A robot whose planner
-# or monitor asks a hosted model (an LLM task planner, a hosted VLM judging a
-# camera frame) cannot honestly claim F2Modification.FULL for that check:
-# FULL requires direct access to the energy function (logits, weights,
-# activations), which a hosted API call structurally cannot expose. The
-# honest ceiling is PARTIAL (MEDIUM). This is a heuristic over the
-# monitor/rule's own source plus one level of directly-called helpers, the
-# same check vsl-langgraph and vsl-maf carry; it can miss deeper indirection
-# and cannot confirm a genuine FULL claim either.
-_HOSTED_API_MARKERS = (
-    "openai",
-    "anthropic",
-    "google.genai",
-    "google.generativeai",
-    "cohere",
-    "mistralai",
-    "litellm",
-    "azure.ai.inference",
-)
-
-
-def _reaches_hosted_api(fn: Callable[..., Any], _seen: set | None = None) -> bool:
-    if _seen is None:
-        _seen = set()
-    if fn in _seen:
-        return False
-    _seen.add(fn)
-
-    if inspect.getmodule(fn) is None:
-        return False
-    try:
-        source = inspect.getsource(fn)
-    except (OSError, TypeError):
-        return False
-    source_lower = source.lower()
-    if any(marker in source_lower for marker in _HOSTED_API_MARKERS):
-        return True
-
-    code = getattr(fn, "__code__", None)
-    globalns = getattr(fn, "__globals__", None)
-    if code is None or globalns is None:
-        return False
-    for referenced_name in code.co_names:
-        candidate = globalns.get(referenced_name)
-        if callable(candidate) and candidate is not fn:
-            if _reaches_hosted_api(candidate, _seen):
-                return True
-    return False
-
-
-def _warn_if_full_claim_reaches_hosted_api(name: str, assurance_basis: Any, fn: Callable[..., Any]) -> None:
-    if assurance_basis.f2_modification != F2Modification.FULL:
-        return
-    if not _reaches_hosted_api(fn):
-        return
-    warnings.warn(
-        f"'{name}' claims F2Modification.FULL, but its monitor/rule appears to "
-        "call a hosted model API (openai/anthropic/google.genai/cohere/mistralai/"
-        "litellm detected in its source). A hosted, black-box API call cannot "
-        "directly modify the energy function -- FULL is not achievable this way. "
-        "The honest ceiling is F2Modification.PARTIAL (MEDIUM assurance). This is "
-        "a heuristic check, not proof -- it can miss indirect calls, and passing "
-        "it does not confirm FULL is correct either.",
-        stacklevel=3,
-    )
-
 
 class ROS2Adapter:
     """VSLAdapter for ROS 2.
@@ -122,7 +53,6 @@ class ROS2Adapter:
                 "Use safe_message / on_blocked for the robot's own recovery behaviour.",
                 stacklevel=2,
             )
-        _warn_if_full_claim_reaches_hosted_api(f"PreNode '{pre_node.name}'", pre_node.assurance_basis, pre_node.monitor)
         identity_key = self.identity_key
 
         async def gate(candidate_input: Any) -> None:
@@ -136,7 +66,6 @@ class ROS2Adapter:
         return gate
 
     def compile_invariant(self, invariant: Invariant) -> CompiledGate:
-        _warn_if_full_claim_reaches_hosted_api(f"Invariant '{invariant.name}'", invariant.assurance_basis, invariant.rule)
         identity_key = self.identity_key
 
         async def gate(candidate_input: Any) -> None:

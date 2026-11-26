@@ -69,7 +69,6 @@ from .conditions import (
     SolePublisherCondition,
     steady_timer,
 )
-from .conditions import NO_MODEL
 from .integration import ActiveGoal, GatedActionClient, goal_id_hex
 from .runner import TerminalLatch, VSLGateBlocked, default_runner
 from .supervisor import GoalSupervisor, cancel_accepted
@@ -220,7 +219,6 @@ def _make_node_class():
                     name=SUPERVISION_INVARIANT,
                     description=f"Every goal {self.upstream_action} is executing was sent through this guard and is supervised by it.",
                     rule=all_supervised,
-                    assurance_basis=NO_MODEL,
                 )
             )
             status_qos = QoSProfile(  # what rclpy/rclcpp action servers publish status with

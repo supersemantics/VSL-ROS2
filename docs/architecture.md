@@ -243,7 +243,7 @@ The ledger records *decisions and interventions*, not every message. A 2-minute 
 | `Invariant` | each condition (`condition.invariant()`), and `upstream_goals_supervised` |
 | `PreNode` + `GammaEstimate` | available in the Python API for policies with a measurable margin; the shipped guard uses none (ROS 2 functions give verdicts, not margins) |
 | F1 pre-commitment | the gate check completes before the goal is accepted, and before it is forwarded |
-| F2 / `AssuranceBasis` | `NONE` for every condition (no model at the guarded call): assurance level LOW. The level measures influence on a model, not enforcement |
+| Assurance | none declared: conditions and the supervision Invariant are built without an `assurance_basis`. Whether a gate held before its side effect is computed from the ledger (`VerbaLedger.enforcement`), from action records the application writes |
 | `TerminalState` | `terminal_state` in the config; entered through a `terminal: true` condition |
 | `HumanAuthorisedTransition` | `vsl_guard_release`: a named approver, a `GovernanceAuthority` and evidence |
 | `Specification` update | `SPECIFICATION_UPDATE` when the configuration hash changes between runs |

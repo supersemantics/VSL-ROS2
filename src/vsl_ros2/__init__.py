@@ -44,15 +44,15 @@ from .runner import DEFAULT_TIMEOUT_SEC, GateRunner, TerminalLatch, VSLGateBlock
 from .supervisor import GoalSupervisor, cancel_accepted
 from .witness import InterventionWitness
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
-# write_gate_decision / write_handover and the 2026.10 Gamma rule are what this
-# package's docs and examples rely on; handovers arrived in vsl-core 0.3.0.
-_MIN_VSL_CORE = (0, 3, 0)
+# Gates are built without an assurance basis, and the docs use write_action /
+# enforcement; both arrived in vsl-core 0.4.0 (handovers in 0.3.0).
+_MIN_VSL_CORE = (0, 4, 0)
 _found = tuple(int(part) for part in _vsl_core.__version__.split(".")[:3])
 if _found < _MIN_VSL_CORE:
     raise ImportError(
-        f"vsl-ros2 {__version__} needs vsl-core >= 0.3.0, found {_vsl_core.__version__}. "
+        f"vsl-ros2 {__version__} needs vsl-core >= 0.4.0, found {_vsl_core.__version__}. "
         "Upgrade: pip install --upgrade super-semantics-vsl"
     )
 
